@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(HeadyMetal)
+project(HeavyMetal)
 
 add_executable(HeavyMetal MACOSX_BUNDLE
   metal.m
