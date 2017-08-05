@@ -1,16 +1,24 @@
-#import <Foundation/Foundation.h>
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#include <simd/simd.h>
+
+static const vector_float2 triangleVertices[] =
+{
+    {  1,  -1 },
+    { -1,  -1 },
+    {  0,   1 },
+};
 
 @interface AppDelegate : NSObject<NSApplicationDelegate>
 {
     NSWindow* window;
     NSView* view;
     id<MTLDevice> device;
+    id<MTLCommandQueue> commandQueue;
+    id<MTLRenderPipelineState> pipelineState;
     CAMetalLayer* layer;
     CVDisplayLinkRef displayLink;
-    id<MTLCommandQueue> commandQueue;
 }
 - (BOOL)update:(CVTimeStamp const *)timeStamp;
 @end
@@ -43,14 +51,24 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink,
     window.contentView =view;
     
     device = MTLCreateSystemDefaultDevice();
+    
     layer = [CAMetalLayer layer];
     layer.device = device;
     layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-    
-    commandQueue = [device newCommandQueue];
-    
     view.wantsLayer = YES;
     view.layer = layer;
+    view.needsDisplay = NO;
+    
+    commandQueue = [device newCommandQueue];
+    id<MTLLibrary> library = [device newDefaultLibrary];
+    
+    MTLRenderPipelineDescriptor* pipelineDesc = [MTLRenderPipelineDescriptor new];
+    id<MTLFunction> vertexShader = [library newFunctionWithName:@"vertexShader"];
+    id<MTLFunction> fragmentShader = [library newFunctionWithName:@"fragmentShader"];
+    pipelineDesc.vertexFunction = vertexShader;
+    pipelineDesc.fragmentFunction = fragmentShader;
+    pipelineDesc.colorAttachments[0].pixelFormat = layer.pixelFormat;
+    pipelineState = [device newRenderPipelineStateWithDescriptor:pipelineDesc error:nil];
     
     CVDisplayLinkCreateWithActiveCGDisplays(&displayLink);
     CVDisplayLinkSetOutputCallback(displayLink, &DisplayLinkCallback, (__bridge void *)self);
@@ -61,27 +79,33 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink,
 
 - (BOOL)update:(CVTimeStamp const *)timeStamp
 {
-    id<CAMetalDrawable> drawable = [layer nextDrawable];
-    MTLRenderPassDescriptor*   renderPassDescriptor = [MTLRenderPassDescriptor renderPassDescriptor];
-    
-    MTLRenderPassColorAttachmentDescriptor* colorAttachment = [MTLRenderPassColorAttachmentDescriptor new];
-    colorAttachment.texture = drawable.texture;
-    colorAttachment.clearColor = MTLClearColorMake(0.0, 0.0, 1.0, 1.0);
-    colorAttachment.loadAction = MTLLoadActionClear;
-    colorAttachment.storeAction = MTLStoreActionStore;
-    [renderPassDescriptor.colorAttachments setObject:colorAttachment atIndexedSubscript:0];
-    
-    id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
-    id<MTLRenderCommandEncoder> encoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-    
-    // Do actual rendering here...
-    
-    [encoder endEncoding];
-    
-    [commandBuffer presentDrawable:drawable];
-    [commandBuffer commit];
+    @autoreleasepool
+    {
+        id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
+        // TODO: signal a semaphore in commandBuffer's completion handler here...
+        
+        id<CAMetalDrawable> drawable = [layer nextDrawable];
+        
+        MTLRenderPassDescriptor*   renderPassDescriptor = [MTLRenderPassDescriptor renderPassDescriptor];
+        MTLRenderPassColorAttachmentDescriptor* colorAttachment = [MTLRenderPassColorAttachmentDescriptor new];
+        colorAttachment.texture = drawable.texture;
+        colorAttachment.clearColor = MTLClearColorMake(0.0, 0.0, 1.0, 1.0);
+        colorAttachment.loadAction = MTLLoadActionClear;
+        colorAttachment.storeAction = MTLStoreActionStore;
+        [renderPassDescriptor.colorAttachments setObject:colorAttachment atIndexedSubscript:0];
+        
+        id<MTLRenderCommandEncoder> encoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
+        [encoder setRenderPipelineState:pipelineState];
+        
+        [encoder setVertexBytes:triangleVertices length:sizeof(triangleVertices) atIndex:0];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+        
+        [encoder endEncoding];
+        
+        [commandBuffer presentDrawable:drawable];
+        [commandBuffer commit];
+    }
 
-    
     return YES;
 }
 @end
@@ -97,7 +121,9 @@ int main(int argc, char *argv[])
         NSMenu* bar = [[NSMenu alloc] init];
         [NSApp setMainMenu:bar];
         
-        NSMenuItem* appMenuItem = [bar addItemWithTitle:@"" action:NULL keyEquivalent:@""];
+        NSMenuItem* appMenuItem = [bar addItemWithTitle:@""
+                                                 action:NULL
+                                          keyEquivalent:@""];
         NSMenu* appMenu = [[NSMenu alloc] init];
         [appMenuItem setSubmenu:appMenu];
         
