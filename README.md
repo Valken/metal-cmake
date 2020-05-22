@@ -3,7 +3,7 @@ MacOS Metal starter project using CMake
 
 ## Usage
 
-Run ```cmake . -G Xcode``` from the root directory and open HeavyMetal.xcodeproj to get started?
+Run ```cmake . -G Xcode``` from the root directory and open HeavyMetal.xcodeproj to get started.
 
 ## Why?
 
