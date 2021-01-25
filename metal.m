@@ -2,6 +2,9 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include <simd/simd.h>
+#include "imgui.h"
+#include "imgui_impl_metal.h"
+#include "imgui_impl_osx.h"
 
 static const vector_float2 triangleVertices[] =
 {
@@ -51,7 +54,14 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink,
     window.contentView =view;
     
     device = MTLCreateSystemDefaultDevice();
-    
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui::StyleColorsDark();
+    ImGui_ImplMetal_Init(device);
+
+
     layer = [CAMetalLayer layer];
     layer.device = device;
     layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
@@ -93,7 +103,7 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink,
         colorAttachment.loadAction = MTLLoadActionClear;
         colorAttachment.storeAction = MTLStoreActionStore;
         [renderPassDescriptor.colorAttachments setObject:colorAttachment atIndexedSubscript:0];
-        
+
         id<MTLRenderCommandEncoder> encoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
         [encoder setRenderPipelineState:pipelineState];
         
