@@ -24,6 +24,7 @@ static const vector_float2 triangleVertices[] =
     CVDisplayLinkRef displayLink;
 }
 - (BOOL)update:(CVTimeStamp const *)timeStamp;
+- (void)renderUI:(MTLRenderPassDescriptor *)descriptor :(id<MTLCommandBuffer>)buffer :(id <MTLRenderCommandEncoder>)encoder;
 @end
 
 static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink,
@@ -103,20 +104,45 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink,
         colorAttachment.loadAction = MTLLoadActionClear;
         colorAttachment.storeAction = MTLStoreActionStore;
         [renderPassDescriptor.colorAttachments setObject:colorAttachment atIndexedSubscript:0];
-
+//
         id<MTLRenderCommandEncoder> encoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
         [encoder setRenderPipelineState:pipelineState];
-        
+
         [encoder setVertexBytes:triangleVertices length:sizeof(triangleVertices) atIndex:0];
         [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+
+
+        [self renderUI :renderPassDescriptor :commandBuffer :encoder];
         
         [encoder endEncoding];
-        
         [commandBuffer presentDrawable:drawable];
         [commandBuffer commit];
     }
 
     return YES;
+}
+
+- (void)renderUI:(MTLRenderPassDescriptor *)renderPassDescriptor :(id<MTLCommandBuffer>)commandBuffer :(id <MTLRenderCommandEncoder>)renderEncoder;
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize.x = 800; //view.bounds.size.width;
+    io.DisplaySize.y = 600; //view.bounds.size.height;
+
+    io.DisplayFramebufferScale = ImVec2(1, 1);
+    io.DeltaTime = 1 / 60;
+    static bool show_demo_window = true;
+
+    ImGui_ImplMetal_NewFrame(renderPassDescriptor);
+    ImGui_ImplOSX_NewFrame(nil);
+    ImGui::NewFrame();
+
+    ImGui::ShowDemoWindow(&show_demo_window);
+
+    ImGui::Render();
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    draw_data->FramebufferScale = ImVec2(1, 1);
+    ImGui_ImplMetal_RenderDrawData(draw_data, commandBuffer, renderEncoder);
+    
 }
 @end
 
